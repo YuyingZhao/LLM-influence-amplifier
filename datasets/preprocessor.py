@@ -1,16 +1,31 @@
-import numpy as np
-from collections import defaultdict
-import random
-import pickle
-from datetime import datetime
+"""Dataset preprocessing utilities for the weibo dataset."""
+
 import os
+import pickle
+import random
+from collections import defaultdict
+from datetime import datetime
+
+import numpy as np
 import torch
 
+
 def seed_everything(seed):
+    """Seed Python and NumPy RNGs for reproducibility.
+
+    Args:
+        seed: Integer seed value.
+    """
     np.random.seed(seed)
     random.seed(seed)
 
 def load_weibo():
+    """Load and structure raw weibo content and interaction files.
+
+    Returns:
+        Tuple containing post content, authors, post/repost mappings, influence
+        counts, and timestamp dictionaries.
+    """
     # transform raw data into structured format
     content_filename = './weibo/src/root_content.txt'
     post_repost_filename = './weibo/src/total.txt'
@@ -86,6 +101,14 @@ def load_weibo():
     return post_content_dict, post_author_dict, post_dict, repost_dict, reverse_repost_dict, influence_dict, post_time_dict, repost_time_dict
 
 def load_weibo_network(all_users):
+    """Load the weibo follow network and derive a two-hop adjacency.
+
+    Args:
+        all_users: Iterable of user IDs to keep in the network.
+
+    Returns:
+        Tuple of (follow_edges, two_hop_adj, user_index).
+    """
     follow_filename = './weibo/src/weibo_network.txt'
     follow_edges = []
     with open(follow_filename, 'r') as file:
@@ -116,11 +139,24 @@ def load_weibo_network(all_users):
     return follow_edges, two_hop_adj, user_index
 
 def dump_data(data, filename):
+    """Helper function to serialize data to disk.
+
+    Args:
+        data: Python object to serialize.
+        filename: Output file path.
+    """
     with open(filename, 'wb') as f:
         pickle.dump(data, f)
 
 class preprocessor:
+    """Preprocess the weibo dataset for training."""
     def __init__(self, dataset_name, dataset_save_prefix):
+        """Initialize preprocessing and persist processed outputs.
+
+        Args:
+            dataset_name: Name of the dataset to preprocess.
+            dataset_save_prefix: Directory prefix to save outputs.
+        """
         self.dataset_name = dataset_name
         self.dataset_save_prefix = dataset_save_prefix
         if dataset_name == 'weibo':
@@ -165,6 +201,14 @@ class preprocessor:
             print('Finish saving preprocessed data')
 
     def extract_dense_subset(self, topk):
+        """Extract a dense user subset around top-k influential posts.
+
+        Args:
+            topk: Number of top posts used as seed.
+
+        Returns:
+            Set of user IDs in the dense subset.
+        """
         # obtain the users who (1) are involved in the topk posts within multiple hops (2) have at least one post and repost behavior
         topk_posts = sorted(self.influence_dict.items(), key=lambda x: x[1], reverse=True)[:topk]
         users = [self.post_author_dict[k] for k, v in topk_posts] # initial seed
@@ -198,6 +242,14 @@ class preprocessor:
         return set(total_users).intersection(post_repost_user_set)
 
     def prune_cold_start(self, user_subset):
+        """Prune posts to reduce cold-start and enforce repost activity.
+
+        Args:
+            user_subset: Set of user IDs to keep.
+
+        Returns:
+            Set of post IDs after pruning.
+        """
         # obtain posts with at least 5 repost behaviors within the user subset
         pruned_reverse_repost_dict = {}
         for post, repost_users in self.reverse_repost_dict.items():
@@ -228,6 +280,12 @@ class preprocessor:
 
 def main(dataset_name: str ='weibo',
         seed: int = 42):
+    """Run preprocessing for a given dataset.
+
+    Args:
+        dataset_name: Name of the dataset to preprocess.
+        seed: Random seed.
+    """
     seed_everything(seed)
     dataset_save_prefix = './'+dataset_name+'/preprocessed/'
     if not os.path.exists(dataset_save_prefix):
@@ -238,4 +296,3 @@ def main(dataset_name: str ='weibo',
 if __name__ == "__main__":
     from jsonargparse.cli import CLI
     CLI(main)
-
