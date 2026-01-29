@@ -1,13 +1,24 @@
-from utils import *
-from torch_geometric.utils import degree
+"""Extract neighboring posts for interest summarization prompts."""
+
 import torch.nn.functional as F
-    
+from torch_geometric.utils import degree
+from utils import *
+
+
 def main(
     dataset_name: str = 'weibo',
     num_hop: int = 1,
     sample_post_num: int = 10,
     sample_flag: str = 'uniform'
 ):
+    """Extract neighboring posts based on graph structure.
+
+    Args:
+        dataset_name: Name of the dataset to use.
+        num_hop: Hop count for neighborhood selection.
+        sample_post_num: Number of neighboring posts to sample.
+        sample_flag: Sampling strategy flag.
+    """
     seed_everything(42)
     # load data
     post_content_dict, post_author_dict, influence_dict = pickle_load('../datasets/{}/preprocessed/post_info.pkl'.format(dataset_name))

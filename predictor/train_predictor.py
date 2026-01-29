@@ -1,16 +1,25 @@
-import torch
-import numpy as np
-import random
-from torch.utils.data import Dataset as BaseDataset
-from torch.utils.data import DataLoader
-import torch.nn as nn
-import time
-from sentence_transformers import SentenceTransformer
-import pickle
+"""Train the pairwise influence predictor for the weibo dataset."""
+
 import os
+import pickle
+import random
+import time
 from collections import defaultdict
 
+import numpy as np
+import torch
+import torch.nn as nn
+from sentence_transformers import SentenceTransformer
+from torch.utils.data import DataLoader
+from torch.utils.data import Dataset as BaseDataset
+
+
 def seed_everything(seed):
+    """Seed RNGs for reproducibility.
+
+    Args:
+        seed: Integer seed value.
+    """
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -19,18 +28,37 @@ def seed_everything(seed):
     torch.backends.cudnn.benchmark = False
 
 def batch_to_gpu(batch, device):
+    """Move batch tensors to the target device.
+
+    Args:
+        batch: Dict of tensors.
+        device: Target torch.device.
+
+    Returns:
+        Updated batch dict on device.
+    """
     for c in batch:
         batch[c] = batch[c].to(device)
     return batch
 
 class Dataset(BaseDataset):
+    """Dataset wrapper for pairwise influence instances."""
     def __init__(self, users, content, label, creator):
+        """Initialize dataset fields.
+
+        Args:
+            users: Target user IDs.
+            content: Content/post IDs.
+            label: Influence labels.
+            creator: Creator user IDs.
+        """
         self.users = users
         self.content = content
         self.label = label
         self.creator = creator
 
     def _get_feed_dict(self, index):
+        """Build a single training instance dict."""
         feed_dict = {
             'users': self.users[index],
             'content': self.content[index],
@@ -40,12 +68,15 @@ class Dataset(BaseDataset):
         return feed_dict
 
     def __len__(self):
+        """Return dataset size."""
         return len(self.users)
 
     def __getitem__(self, index):
+        """Return a single instance by index."""
         return self._get_feed_dict(index)
 
     def collate_batch(self, feed_dicts):
+        """Collate a batch of instances into tensors."""
         feed_dict = dict()
         feed_dict['users'] = torch.LongTensor([d['users'] for d in feed_dicts])
         feed_dict['creator'] = torch.LongTensor([d['creator'] for d in feed_dicts])
@@ -54,10 +85,29 @@ class Dataset(BaseDataset):
         return feed_dict
 
 def pickle_load(file_name):
+    """Load a pickle file.
+
+    Args:
+        file_name: Path to the pickle file.
+
+    Returns:
+        Deserialized object.
+    """
     with open(file_name, 'rb') as f:
         return pickle.load(f)
 
 def prepare_instances(pids, post_author_dict, reverse_repost_dict, two_hop_adj):
+    """Create labeled influence instances from post IDs.
+
+    Args:
+        pids: List of post IDs.
+        post_author_dict: Map of post to author.
+        reverse_repost_dict: Map of post to reposting users.
+        two_hop_adj: Two-hop adjacency for candidate neighbors.
+
+    Returns:
+        List of [user, creator, content, label] instances.
+    """
     instances = []
     pos_cnt = 0
     neg_cnt = 0
@@ -84,7 +134,13 @@ def prepare_instances(pids, post_author_dict, reverse_repost_dict, two_hop_adj):
     return instances
 
 class Prob_Model(nn.Module):
+    """Pairwise influence prediction model."""
     def __init__(self, dataset_name):
+        """Initialize the model and precompute embeddings.
+
+        Args:
+            dataset_name: Dataset name used to load preprocessed data.
+        """
         super().__init__()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         post_content_dict, post_author_dict, influence_dict = pickle_load('../datasets/{}/preprocessed/post_info.pkl'.format(dataset_name))
@@ -147,6 +203,7 @@ class Prob_Model(nn.Module):
         self._init_weights()
 
     def _init_weights(self):
+        """Initialize linear layer weights."""
         for m in self.modules():
             if isinstance(m, nn.Linear):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
@@ -154,6 +211,7 @@ class Prob_Model(nn.Module):
                     nn.init.constant_(m.bias, 0)
 
     def forward(self, uids, pids, creator_uids):
+        """Compute pairwise influence probabilities from IDs."""
         u_target = self.user_dimension_reduction(self.user_embedding[uids]) 
         u_creator = self.user_dimension_reduction(self.user_embedding[creator_uids]) 
         c = self.post_dimension_reduction(self.post_embedding[pids]) 
@@ -165,6 +223,7 @@ class Prob_Model(nn.Module):
         return ps
 
     def predict(self, uids, content_embs, creator_uids): # directly use post embeddings
+        """Compute probabilities using precomputed content embeddings."""
         u_target = self.user_dimension_reduction(self.user_embedding[uids]) 
         u_creator = self.user_dimension_reduction(self.user_embedding[creator_uids]) 
         c = self.post_dimension_reduction(content_embs) 
@@ -179,6 +238,7 @@ class Prob_Model(nn.Module):
 def train_model(model, optimizer, device, train_dataset, val_dataset, 
           epoch_num, batch_size, patience,
           save_file_name):
+    """Train the predictor model with early stopping."""
     loss_func = nn.MSELoss(reduction='sum')
     best_epoch = 0
     best_loss = float('inf')
@@ -239,6 +299,16 @@ def main(lr: float = 1e-4,
         dataset_name: str ='weibo',
         patience: int = 20,
         seed: int = 42):
+    """Train and evaluate the pairwise influence predictor.
+
+    Args:
+        lr: Learning rate.
+        epoch_num: Maximum number of training epochs.
+        batch_size: Training batch size.
+        dataset_name: Dataset name used to load preprocessed data.
+        patience: Early stopping patience.
+        seed: Random seed.
+    """
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     seed_everything(seed)
 

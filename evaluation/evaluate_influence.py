@@ -1,3 +1,5 @@
+"""Evaluate LLM-generated post influence using a learned pairwise predictor."""
+
 import numpy as np
 from collections import defaultdict
 import torch
@@ -8,7 +10,15 @@ sys.path.insert(1, 'the path to the folder containing train_predictor.py [predic
 from train_predictor import *
 
 class influence_estimator():
+    """Monte Carlo influence spread estimator."""
     def __init__(self, adj, dataset_name, mc_num):
+        """Initialize the estimator and load the predictor model.
+
+        Args:
+            adj: Dict mapping a node to its influenced neighbors.
+            dataset_name: Dataset name used to load model weights.
+            mc_num: Number of Monte Carlo simulations.
+        """
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.adj = adj
         self.mc_num = mc_num
@@ -38,6 +48,15 @@ class influence_estimator():
         self.degree = {k: v for k, v in self.degree.items()}
         
     def estimate(self, node_id, content_id): 
+        """Estimate influence spread using content IDs.
+
+        Args:
+            node_id: Source user ID.
+            content_id: Post/content ID.
+
+        Returns:
+            List of activated node lists per Monte Carlo run.
+        """
         spread = []
         for i in range(self.mc_num):
             new_active, A = [(0, node_id)], [node_id]
@@ -62,6 +81,15 @@ class influence_estimator():
         return spread
 
     def estimate_post(self, node_id, content): 
+        """Estimate influence spread using raw content text.
+
+        Args:
+            node_id: Source user ID.
+            content: Generated post text.
+
+        Returns:
+            List of activated node lists per Monte Carlo run.
+        """
         content_emb = self.sentence_model.encode(content)
         content_emb = torch.from_numpy(content_emb).to(self.device)
         spread = []
@@ -96,6 +124,18 @@ def main(dataset_name: str = 'weibo',
          use_structure: str = 'true',
          num_hop: int = 1,
          num_sample: int = 10):
+    """Run LLM generation, influence estimation, and result persistence.
+
+    Args:
+        dataset_name: Name of the dataset to evaluate.
+        mc_num: Number of Monte Carlo simulations per post.
+        seed: Random seed.
+        llm_name: LLM checkpoint name.
+        flag: Prompt generation flag.
+        use_structure: Whether to use structure-aware prompts.
+        num_hop: Hop count for structure-aware prompts.
+        num_sample: Sample size for structure-aware prompts.
+    """
     seed_everything(seed)
     if not os.path.exists('results'):
         os.makedirs('results')

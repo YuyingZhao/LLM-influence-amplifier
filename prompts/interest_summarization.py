@@ -1,5 +1,8 @@
+"""Summarize audience interests from neighboring posts."""
+
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from utils import *
+
 
 def main(
     dataset_name: str = 'weibo',
@@ -7,6 +10,14 @@ def main(
     sample_post_num: int = 10,
     sample_flag: str = 'uniform'
 ):
+    """Generate interest summaries based on neighboring posts.
+
+    Args:
+        dataset_name: Name of the dataset to use.
+        num_hop: Hop count for neighborhood selection.
+        sample_post_num: Number of neighboring posts to sample.
+        sample_flag: Sampling strategy flag.
+    """
     seed_everything(42)
 
     device = "cuda" # the device to load the model onto

@@ -1,4 +1,7 @@
+"""Generate prompts for content-centric and structure-aware scenarios."""
+
 from utils import *
+
 
 def main(dataset_name: str = 'weibo',
          seed: int = 42,
@@ -6,6 +9,16 @@ def main(dataset_name: str = 'weibo',
          flag: str = 'random_neighbor',
          num_hop: int = 1,
          num_sample: int = 10):
+    """Generate prompts and save them to disk.
+
+    Args:
+        dataset_name: Name of the dataset to use.
+        seed: Random seed.
+        use_structure: Whether to use structure-aware prompts.
+        flag: Sampling strategy flag.
+        num_hop: Hop count for structure-aware prompts.
+        num_sample: Number of sampled items for prompts.
+    """
     if use_structure == 'true':
         print('structure-aware', flag)
     else:
